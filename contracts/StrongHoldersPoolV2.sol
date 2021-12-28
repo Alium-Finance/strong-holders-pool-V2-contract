@@ -16,6 +16,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     uint256 public immutable DISTRIBUTION_END; // 18 month's after first unlock
 
     struct GeneralPoolInfo {
+        uint256 poolId;
+        uint256 initialBalance;
         uint256 balance;
         uint256[MAX_POOL_USERS] rewards; // reward
         address[MAX_POOL_USERS] accounts;
@@ -29,9 +31,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     // pool stored info by pool id
     mapping (uint8 => Pool[UNLOCKS]) public pools;
     mapping (uint8 => GeneralPoolInfo) public generalPoolInfo;
-    // reward pool id -> index -> w.position
-    // 1 -> first
-    mapping(uint8 => mapping(uint8 => uint8)) public withdrawPosition;
 
     IERC20 public token;
     uint256[UNLOCKS] public unlocksDate;
@@ -59,9 +58,17 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         GeneralPoolInfo storage pool2 = generalPoolInfo[1];
         GeneralPoolInfo storage pool3 = generalPoolInfo[2];
 
-        pool1.balance = 5_000_000e18 - 50_000e18;
-        pool2.balance = 8_000_000e18 - 80_000e18;
-        pool3.balance = 12_000_000e18 - 120_000e18;
+        pool1.poolId = 0;
+        pool1.initialBalance = 5_000_000e18 - 50_000e18;
+        pool1.balance = pool1.initialBalance;
+
+        pool2.poolId = 1;
+        pool2.initialBalance = 8_000_000e18 - 80_000e18;
+        pool2.balance = pool2.initialBalance;
+
+        pool3.poolId = 2;
+        pool3.initialBalance = 12_000_000e18 - 120_000e18;
+        pool3.balance = pool3.initialBalance;
 
         require(
             token.balanceOf(address(this)) >=
