@@ -38,6 +38,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     bool private _initialized;
     uint8 private _poolsAmount;
 
+    event Withdrawn(uint256 indexed poolId, uint256 position, address account, uint256 amount);
+
     constructor(
         IERC20 _token,
         uint256[UNLOCKS] memory _unlocksDate
@@ -171,6 +173,12 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
 
                 generalPool.balance -= reward;
                 if (reward != 0) {
+                    emit Withdrawn(
+                        _poolId,
+                        0, // position
+                        generalPool.accounts[i],
+                        reward
+                    );
                     _withdraw(generalPool.accounts[i], reward);
                 }
             }
@@ -182,6 +190,12 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
                     uint8 lastWithdrawPosition = pool.lastWithdrawPosition;
                     reward += generalPool.rewards[lastWithdrawPosition];
                     pool.lastWithdrawPosition++;
+                    emit Withdrawn(
+                        _poolId,
+                        lastWithdrawPosition,
+                        msg.sender,
+                        generalPool.rewards[lastWithdrawPosition]
+                    );
                 }
             }
 
