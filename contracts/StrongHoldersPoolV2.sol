@@ -38,6 +38,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     bool private _initialized;
     uint8 private _poolsAmount;
 
+    event Initialized();
+    event PoolCreated(uint256 poolId);
     event Withdrawn(uint256 indexed poolId, uint256 position, address account, uint256 amount);
 
     constructor(
@@ -82,6 +84,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         require(_poolsAmount == MAX_POOLS, "Pools not set");
 
         _initialized = true;
+
+        emit Initialized();
     }
 
     function setPool(
@@ -100,6 +104,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         pool.accounts = _accounts;
 
         _poolsAmount++;
+
+        emit PoolCreated(_poolId);
     }
 
     function nextClaim()
