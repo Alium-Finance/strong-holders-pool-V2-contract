@@ -13,13 +13,13 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     uint8 public constant MAX_POOL_USERS = 10;
     uint8 public constant MAX_POOLS = 3;
     uint8 public constant UNLOCKS = 10;
-    uint256 public immutable DISTRIBUTION_END; // 18 month's after first unlock
+    uint256 public immutable DISTRIBUTION_END;
 
     struct GeneralPoolInfo {
         uint256 poolId;
         uint256 initialBalance;
         uint256 balance;
-        uint256[MAX_POOL_USERS] rewards; // reward
+        uint256[MAX_POOL_USERS] rewards;
         address[MAX_POOL_USERS] accounts;
     }
 
@@ -57,7 +57,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     function initialize() external onlyOwner {
         require(!_initialized, "SHP: already initialized");
 
-        // excluding TGE balance
         GeneralPoolInfo storage pool1 = generalPoolInfo[0];
         GeneralPoolInfo storage pool2 = generalPoolInfo[1];
         GeneralPoolInfo storage pool3 = generalPoolInfo[2];
@@ -181,7 +180,7 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
                 if (reward != 0) {
                     emit Withdrawn(
                         _poolId,
-                        0, // position
+                        0,
                         generalPool.accounts[i],
                         reward
                     );
@@ -210,7 +209,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         }
     }
 
-    // +
     function _withdraw(address _account, uint256 _balance) internal {
         require(_balance != 0, "Nothing withdraw");
 
@@ -232,7 +230,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         _;
     }
 
-    // +
     modifier isActive() {
         require(
             _initialized && block.timestamp >= unlocksDate[0],
