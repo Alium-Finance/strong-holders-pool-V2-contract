@@ -1,7 +1,6 @@
 module.exports = {
   env: {
     browser: false,
-    es2021: true,
     mocha: true,
     node: true,
   },
@@ -13,7 +12,7 @@ module.exports = {
   ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
-    ecmaVersion: 12,
+    ecmaVersion: 2021,
   },
   rules: {
     "node/no-unsupported-features/es-syntax": [

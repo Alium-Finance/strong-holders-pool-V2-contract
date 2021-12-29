@@ -25,12 +25,12 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
 
     struct Pool {
         uint8 lastWithdrawPosition;
-        mapping (address => bool) rewardAccepted; // set if user accept reward from pool yet
+        mapping(address => bool) rewardAccepted; // set if user accept reward from pool yet
     }
 
     // pool stored info by pool id
-    mapping (uint8 => Pool[UNLOCKS]) public pools;
-    mapping (uint8 => GeneralPoolInfo) public generalPoolInfo;
+    mapping(uint8 => Pool[UNLOCKS]) public pools;
+    mapping(uint8 => GeneralPoolInfo) public generalPoolInfo;
 
     IERC20 public token;
     uint256[UNLOCKS] public unlocksDate;
@@ -40,12 +40,14 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
 
     event Initialized();
     event PoolCreated(uint256 poolId);
-    event Withdrawn(uint256 indexed poolId, uint256 position, address account, uint256 amount);
+    event Withdrawn(
+        uint256 indexed poolId,
+        uint256 position,
+        address account,
+        uint256 amount
+    );
 
-    constructor(
-        IERC20 _token,
-        uint256[UNLOCKS] memory _unlocksDate
-    ) {
+    constructor(IERC20 _token, uint256[UNLOCKS] memory _unlocksDate) {
         token = _token;
         unlocksDate = _unlocksDate;
 
@@ -75,9 +77,7 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
 
         require(
             token.balanceOf(address(this)) >=
-            pool1.balance +
-            pool2.balance +
-            pool3.balance,
+            pool1.balance + pool2.balance + pool3.balance,
             "Not enough balance for activate"
         );
         require(_poolsAmount == MAX_POOLS, "Pools not set");
@@ -90,10 +90,7 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     function setPool(
         uint256[MAX_POOL_USERS] calldata _rewards,
         address[MAX_POOL_USERS] calldata _accounts
-    )
-        external
-        onlyOwner
-    {
+    ) external onlyOwner {
         uint8 _poolId = _poolsAmount;
 
         require(_poolId < MAX_POOLS, "SHP: can't create this pool");
@@ -107,12 +104,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         emit PoolCreated(_poolId);
     }
 
-    function nextClaim()
-        external
-        view
-        returns (uint256 timestamp)
-    {
-        for (uint i; i < UNLOCKS; i++) {
+    function nextClaim() external view returns (uint256 timestamp) {
+        for (uint256 i; i < UNLOCKS; i++) {
             if (block.timestamp < unlocksDate[i]) {
                 timestamp = unlocksDate[i];
                 return timestamp;
@@ -120,21 +113,25 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         }
     }
 
-    function getAccounts(uint8 _poolId) external view returns (address[MAX_POOL_USERS] memory accounts) {
+    function getAccounts(uint8 _poolId)
+        external
+        view
+        returns (address[MAX_POOL_USERS] memory accounts)
+    {
         GeneralPoolInfo memory pool = generalPoolInfo[_poolId];
         accounts = pool.accounts;
     }
 
     // @dev Returns reward per position by pool id
-    function getReward(uint8 _poolId, uint8 _position) external view returns (uint256 reward) {
-        reward = generalPoolInfo[_poolId].rewards[_position];
-    }
-
-    function countReward(uint8 _poolId)
+    function getReward(uint8 _poolId, uint8 _position)
         external
         view
         returns (uint256 reward)
     {
+        reward = generalPoolInfo[_poolId].rewards[_position];
+    }
+
+    function countReward(uint8 _poolId) external view returns (uint256 reward) {
         require(_poolId < MAX_POOLS, "SHP: pool not exist");
 
         GeneralPoolInfo memory generalPool = generalPoolInfo[_poolId];
@@ -145,7 +142,10 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         } else {
             for (uint8 i; i < UNLOCKS; i++) {
                 pool = pools[_poolId][i];
-                if (block.timestamp >= unlocksDate[i] && !pool.rewardAccepted[msg.sender]) {
+                if (
+                    block.timestamp >= unlocksDate[i] &&
+                    !pool.rewardAccepted[msg.sender]
+                ) {
                     uint8 lastWithdrawPosition = pool.lastWithdrawPosition;
                     reward += generalPool.rewards[lastWithdrawPosition];
                 }
@@ -167,30 +167,31 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
 
         uint256 reward;
         if (block.timestamp >= DISTRIBUTION_END) {
-            require(generalPool.balance >= uint256(MAX_POOL_USERS), "Pool closed");
+            require(
+                generalPool.balance >= uint256(MAX_POOL_USERS),
+                "Pool closed"
+            );
 
             for (uint8 i; i < MAX_POOL_USERS; i++) {
                 if (i == MAX_POOL_USERS - 1) {
                     reward = generalPool.balance;
                 } else {
-                    reward = generalPool.balance/ MAX_POOL_USERS;
+                    reward = generalPool.balance / MAX_POOL_USERS;
                 }
 
                 generalPool.balance -= reward;
                 if (reward != 0) {
-                    emit Withdrawn(
-                        _poolId,
-                        0,
-                        generalPool.accounts[i],
-                        reward
-                    );
+                    emit Withdrawn(_poolId, 0, generalPool.accounts[i], reward);
                     _withdraw(generalPool.accounts[i], reward);
                 }
             }
         } else {
             for (uint8 i; i < UNLOCKS; i++) {
                 pool = pools[_poolId][i];
-                if (block.timestamp >= unlocksDate[i] && !pool.rewardAccepted[msg.sender]) {
+                if (
+                    block.timestamp >= unlocksDate[i] &&
+                    !pool.rewardAccepted[msg.sender]
+                ) {
                     pool.rewardAccepted[msg.sender] = true;
                     uint8 lastWithdrawPosition = pool.lastWithdrawPosition;
                     reward += generalPool.rewards[lastWithdrawPosition];
