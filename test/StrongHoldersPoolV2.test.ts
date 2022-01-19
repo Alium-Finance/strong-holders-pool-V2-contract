@@ -133,10 +133,22 @@ describe("StrongHolderPool", function () {
 
             await shp.connect(accounts[1]).leave(poolId)
 
+            let poolInfo_0 = await shp.generalPoolInfo(0)
+            assert.notEqual(poolInfo_0.initialBalance.toString(), poolInfo_0.balance.toString(), "Initial balance changed")
+
             // revert if zero reward
             expect(shp.connect(accounts[1]).leave(poolId)).to.revertedWith('Nothing withdraw');
 
             assert.equal((await token.balanceOf(await accounts[1].getAddress())).toString(), countedReward.toString(), "Claimer wrong balance")
+
+            await setNextBlockTimestamp(Number(await shp.DISTRIBUTION_END()) + 100)
+
+            await shp.connect(accounts[1]).leave(poolId)
+
+            poolInfo_0 = await shp.generalPoolInfo(0)
+            assert.equal(Number(poolInfo_0.balance), 0, "Pool balance not zero")
+
+            expect(shp.connect(accounts[1]).leave(poolId)).to.revertedWith('SHP: pool closed');
         })
 
     })

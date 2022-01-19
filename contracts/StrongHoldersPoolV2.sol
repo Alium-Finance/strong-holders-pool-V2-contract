@@ -162,29 +162,35 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     {
         require(_poolId < MAX_POOLS, "SHP: pool not exist");
 
+        uint256 maxPoolUsers = uint256(MAX_POOL_USERS);
+
         GeneralPoolInfo storage generalPool = generalPoolInfo[_poolId];
         Pool storage pool;
 
         uint256 reward;
         if (block.timestamp >= DISTRIBUTION_END) {
             require(
-                generalPool.balance >= uint256(MAX_POOL_USERS),
-                "Pool closed"
+                generalPool.balance >= uint256(maxPoolUsers),
+                "SHP: pool closed"
             );
 
-            for (uint8 i; i < MAX_POOL_USERS; i++) {
-                if (i == MAX_POOL_USERS - 1) {
-                    reward = generalPool.balance;
+            uint256 poolBalance = generalPool.balance;
+            uint256 leftReward = poolBalance / maxPoolUsers;
+            uint256 lastLeftReward = (maxPoolUsers - 1) * leftReward;
+            for (uint8 i; i < maxPoolUsers; i++) {
+                if (i == maxPoolUsers - 1) {
+                    reward = lastLeftReward;
                 } else {
-                    reward = generalPool.balance / MAX_POOL_USERS;
+                    reward = leftReward;
                 }
 
-                generalPool.balance -= reward;
                 if (reward != 0) {
                     emit Withdrawn(_poolId, 0, generalPool.accounts[i], reward);
                     _withdraw(generalPool.accounts[i], reward);
                 }
             }
+
+            generalPool.balance -= poolBalance;
         } else {
             for (uint8 i; i < UNLOCKS; i++) {
                 pool = pools[_poolId][i];
