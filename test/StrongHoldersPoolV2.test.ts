@@ -93,9 +93,7 @@ describe("StrongHolderPool", function () {
             rewards.push([])
             let y = 0;
             while (y < 10) {
-                console.log(`Reward pool: ${i}`)
                 rewards[i].push(BigNumber.from(totalRewards[i]).div(BigNumber.from(10)))
-                console.log(rewards[i].toString())
                 y++;
             }
 
@@ -112,6 +110,15 @@ describe("StrongHolderPool", function () {
         it("#initialize", async () => {
             await token.mint(shp.address, TOTAL_LOCKED_TOKENS)
             await shp.initialize()
+
+            let poolInfo_0 = await shp.generalPoolInfo(0)
+            let poolInfo_1 = await shp.generalPoolInfo(1)
+            let poolInfo_2 = await shp.generalPoolInfo(2)
+
+            assert.equal(String(poolInfo_0.initialBalance), String(poolInfo_0.balance), "b")
+            assert.equal(String(poolInfo_1.initialBalance), String(poolInfo_1.balance), "b")
+            assert.equal(String(poolInfo_2.initialBalance), String(poolInfo_2.balance), "b")
+
         })
 
         it("#leave", async () => {
@@ -123,7 +130,7 @@ describe("StrongHolderPool", function () {
             expect(shp.connect(accounts[1]).leave(poolId)).to.revertedWith('SHP: distribution impossible');
 
             let nextClaim = await shp.nextClaim();
-            console.log(Number(nextClaim))
+
             await setNextBlockTimestamp(Number(nextClaim))
 
             countedReward = await shp.countReward(poolId)
