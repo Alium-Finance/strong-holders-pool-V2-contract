@@ -11,35 +11,29 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint8 public constant MAX_POOL_USERS = 10;
-    uint8 public constant MAX_POOLS = 3;
-    uint8 public constant UNLOCKS = 10;
-    uint256 public immutable DISTRIBUTION_END;
+    uint8 public constant MAX_UNLOCKS = 10;
 
     struct GeneralPoolInfo {
-        uint256 poolId;
+        IERC20 token;
         uint256 initialBalance;
-        uint256 balance;
-        uint256[MAX_POOL_USERS] rewards;
+        uint256[MAX_UNLOCKS] rewards;
         address[MAX_POOL_USERS] accounts;
+        uint256[MAX_UNLOCKS] unlocks;
     }
 
+    // global packed pool info
+    GeneralPoolInfo public generalPoolInfo;
+
     struct Pool {
+        uint256 balance;
         uint8 lastWithdrawPosition;
         mapping(address => bool) rewardAccepted; // set if user accept reward from pool yet
     }
 
     // pool stored info by pool id
-    mapping(uint8 => Pool[UNLOCKS]) public pools;
-    mapping(uint8 => GeneralPoolInfo) public generalPoolInfo;
-
-    IERC20 public token;
-    uint256[UNLOCKS] public unlocksDate;
-
-    bool private _initialized;
-    uint8 private _poolsAmount;
+    Pool[MAX_UNLOCKS] public pools;
 
     event Initialized();
-    event PoolCreated(uint256 poolId);
     event Withdrawn(
         uint256 indexed poolId,
         uint256 position,
@@ -47,201 +41,140 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         uint256 amount
     );
 
-    constructor(IERC20 _token, uint256[UNLOCKS] memory _unlocksDate) {
-        token = _token;
-        unlocksDate = _unlocksDate;
+    // @dev Initializer.
+    function initialize(
+        IERC20 _token,
+        uint256 _initialBalance,
+        uint256[MAX_UNLOCKS] calldata _unlocksDate,
+        uint256[MAX_UNLOCKS] calldata _rewards,
+        address[MAX_POOL_USERS] calldata _accounts
+    ) external onlyOwner {
+        generalPoolInfo = GeneralPoolInfo({
+            token: _token,
+            initialBalance: _initialBalance,
+            rewards: _rewards,
+            accounts: _accounts,
+            unlocks: _unlocksDate
+        });
 
-        // set end of the normal distribution, 18 months after start
-        DISTRIBUTION_END = _unlocksDate[0] + 18 * 31 days;
-    }
-
-    // @dev Initialize contract
-    function initialize() external onlyOwner {
-        require(!_initialized, "SHP: already initialized");
-
-        GeneralPoolInfo storage pool1 = generalPoolInfo[0];
-        GeneralPoolInfo storage pool2 = generalPoolInfo[1];
-        GeneralPoolInfo storage pool3 = generalPoolInfo[2];
-
-        pool1.poolId = 0;
-        pool1.initialBalance = 5_000_000e18 - 50_000e18;
-        pool1.balance = pool1.initialBalance;
-
-        pool2.poolId = 1;
-        pool2.initialBalance = 8_000_000e18 - 80_000e18;
-        pool2.balance = pool2.initialBalance;
-
-        pool3.poolId = 2;
-        pool3.initialBalance = 12_000_000e18 - 120_000e18;
-        pool3.balance = pool3.initialBalance;
-
-        require(
-            token.balanceOf(address(this)) >=
-            pool1.balance + pool2.balance + pool3.balance,
-            "Not enough balance for activate"
-        );
-        require(_poolsAmount == MAX_POOLS, "Pools not set");
-
-        _initialized = true;
+        for (uint8 i; i < MAX_UNLOCKS; i++) {
+            pools[i].balance = _initialBalance;
+        }
 
         emit Initialized();
     }
 
-    function setPool(
-        uint256[MAX_POOL_USERS] calldata _rewards,
-        address[MAX_POOL_USERS] calldata _accounts
-    ) external onlyOwner {
-        uint8 _poolId = _poolsAmount;
-
-        require(_poolId < MAX_POOLS, "SHP: can't create this pool");
-
-        GeneralPoolInfo storage pool = generalPoolInfo[_poolId];
-        pool.rewards = _rewards;
-        pool.accounts = _accounts;
-
-        _poolsAmount++;
-
-        emit PoolCreated(_poolId);
-    }
-
-    function nextClaim() external view returns (uint256 timestamp) {
-        for (uint256 i; i < UNLOCKS; i++) {
-            if (block.timestamp < unlocksDate[i]) {
-                timestamp = unlocksDate[i];
-                return timestamp;
-            }
-        }
-    }
-
-    function getAccounts(uint8 _poolId)
+    function getAccounts()
         external
         view
         returns (address[MAX_POOL_USERS] memory accounts)
     {
-        GeneralPoolInfo memory pool = generalPoolInfo[_poolId];
-        accounts = pool.accounts;
+        accounts = generalPoolInfo.accounts;
     }
 
-    // @dev Returns reward per position by pool id
-    function getReward(uint8 _poolId, uint8 _position)
+    // @dev Returns rewards.
+    function getRewards()
         external
         view
-        returns (uint256 reward)
+        returns (uint256[MAX_POOL_USERS] memory rewards)
     {
-        reward = generalPoolInfo[_poolId].rewards[_position];
+        rewards = generalPoolInfo.rewards;
     }
 
-    function countReward(uint8 _poolId) external view returns (uint256 reward) {
-        require(_poolId < MAX_POOLS, "SHP: pool not exist");
+    // @dev Returns rewards.
+    function getUnlocks()
+        external
+        view
+        returns (uint256[MAX_UNLOCKS] memory unlocks)
+    {
+        unlocks = generalPoolInfo.unlocks;
+    }
 
-        GeneralPoolInfo memory generalPool = generalPoolInfo[_poolId];
-        Pool storage pool;
+    function calcExitReward(uint8 _poolId) public view returns (uint256 reward) {
+        require(_poolId < MAX_UNLOCKS, "SHP: pool not exist");
 
-        if (block.timestamp >= DISTRIBUTION_END) {
-            reward = generalPool.balance / MAX_POOL_USERS;
-        } else {
-            for (uint8 i; i < UNLOCKS; i++) {
-                pool = pools[_poolId][i];
-                if (
-                    block.timestamp >= unlocksDate[i] &&
-                    !pool.rewardAccepted[msg.sender]
-                ) {
-                    uint8 lastWithdrawPosition = pool.lastWithdrawPosition;
-                    reward += generalPool.rewards[lastWithdrawPosition];
-                }
+        GeneralPoolInfo memory generalPool = generalPoolInfo;
+        Pool storage pool = pools[_poolId];
+
+        if (block.timestamp >= distributionEnd(_poolId)) {
+            if (MAX_POOL_USERS - pool.lastWithdrawPosition != 0) {
+                reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
             }
+            return reward;
+        }
+
+        if (
+            block.timestamp >= generalPoolInfo.unlocks[_poolId] &&
+            !pool.rewardAccepted[msg.sender]
+        ) {
+            reward = generalPool.rewards[pool.lastWithdrawPosition];
         }
     }
 
     // @dev Leave from pool
     function leave(uint8 _poolId)
         external
-        checkAccess(_poolId)
-        isActive
+        checkAccess()
         nonReentrant
     {
-        require(_poolId < MAX_POOLS, "SHP: pool not exist");
+        require(isPoolUnlocked(_poolId), "SHP: pool is locked");
 
-        uint256 maxPoolUsers = uint256(MAX_POOL_USERS);
+        Pool storage pool = pools[_poolId];
 
-        GeneralPoolInfo storage generalPool = generalPoolInfo[_poolId];
-        Pool storage pool;
+        require(MAX_POOL_USERS - pool.lastWithdrawPosition != 0, "SHP: pool is closed");
+
+        GeneralPoolInfo memory generalPool = generalPoolInfo;
 
         uint256 reward;
-        if (block.timestamp >= DISTRIBUTION_END) {
-            require(
-                generalPool.balance >= uint256(maxPoolUsers),
-                "SHP: pool closed"
-            );
-
-            uint256 poolBalance = generalPool.balance;
-            uint256 leftReward = poolBalance / maxPoolUsers;
-            uint256 lastLeftReward = (maxPoolUsers - 1) * leftReward;
-            for (uint8 i; i < maxPoolUsers; i++) {
-                if (i == maxPoolUsers - 1) {
-                    reward = lastLeftReward;
-                } else {
-                    reward = leftReward;
-                }
-
-                if (reward != 0) {
-                    emit Withdrawn(_poolId, 0, generalPool.accounts[i], reward);
-                    _withdraw(generalPool.accounts[i], reward);
-                }
+        if (block.timestamp >= distributionEnd(_poolId)) {
+            if (MAX_POOL_USERS - pool.lastWithdrawPosition != 0) {
+                reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
             }
-
-            generalPool.balance -= poolBalance;
         } else {
-            for (uint8 i; i < UNLOCKS; i++) {
-                pool = pools[_poolId][i];
-                if (
-                    block.timestamp >= unlocksDate[i] &&
-                    !pool.rewardAccepted[msg.sender]
-                ) {
-                    pool.rewardAccepted[msg.sender] = true;
-                    uint8 lastWithdrawPosition = pool.lastWithdrawPosition;
-                    reward += generalPool.rewards[lastWithdrawPosition];
-                    pool.lastWithdrawPosition++;
-                    emit Withdrawn(
-                        _poolId,
-                        lastWithdrawPosition,
-                        msg.sender,
-                        generalPool.rewards[lastWithdrawPosition]
-                    );
-                }
-            }
+            require(!pool.rewardAccepted[msg.sender], "SHP: no reward!");
 
-            generalPool.balance -= reward;
-            _withdraw(msg.sender, reward);
+            reward = generalPool.rewards[pool.lastWithdrawPosition];
         }
+
+        pools[_poolId].balance -= reward;
+
+        uint256 withdrawPosition = pool.lastWithdrawPosition;
+        pool.lastWithdrawPosition++;
+
+        _withdraw(msg.sender, reward);
+        emit Withdrawn(_poolId, withdrawPosition, msg.sender, reward);
+    }
+
+    // @dev Return timestamp of the end of SHP distribution.
+    // After that time will be honest distribution.
+    function distributionEnd(uint _poolId) public view returns (uint256 timestamp) {
+        require(_poolId < MAX_UNLOCKS, "SHP: pool not exist");
+
+        timestamp = generalPoolInfo.unlocks[_poolId] + 18 * 31 days;
+    }
+
+    // @dev Check status of the pool.
+    function isPoolUnlocked(uint256 _poolId) public view returns (bool result) {
+        require(_poolId < MAX_UNLOCKS, "SHP: pool not exist");
+
+        result = block.timestamp >= generalPoolInfo.unlocks[_poolId];
     }
 
     function _withdraw(address _account, uint256 _balance) internal {
         require(_balance != 0, "Nothing withdraw");
 
-        IERC20(token).safeTransfer(_account, _balance);
+        IERC20(generalPoolInfo.token).safeTransfer(_account, _balance);
     }
 
-    modifier checkAccess(uint8 _poolId) {
-        GeneralPoolInfo memory pool = generalPoolInfo[_poolId];
-
+    modifier checkAccess() {
+        GeneralPoolInfo memory pool = generalPoolInfo;
         bool accessGranted;
         for (uint8 i; i < MAX_POOL_USERS; i++) {
             if (msg.sender == pool.accounts[i]) {
                 accessGranted = true;
             }
         }
-
         require(accessGranted, "Account not found");
-
-        _;
-    }
-
-    modifier isActive() {
-        require(
-            _initialized && block.timestamp >= unlocksDate[0],
-            "SHP: distribution impossible"
-        );
         _;
     }
 }
