@@ -64,6 +64,40 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         emit Initialized();
     }
 
+    // @dev Leave from pool
+    function leave(uint8 _poolId)
+        external
+        checkAccess()
+        nonReentrant
+    {
+        require(isPoolUnlocked(_poolId), "SHP: pool is locked");
+
+        Pool storage pool = pools[_poolId];
+
+        require(MAX_POOL_USERS - pool.lastWithdrawPosition != 0, "SHP: pool is closed");
+
+        GeneralPoolInfo memory generalPool = generalPoolInfo;
+
+        uint256 reward;
+        if (block.timestamp >= distributionEnd(_poolId)) {
+            if (MAX_POOL_USERS - pool.lastWithdrawPosition != 0) {
+                reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
+            }
+        } else {
+            require(!pool.rewardAccepted[msg.sender], "SHP: no reward!");
+
+            reward = generalPool.rewards[pool.lastWithdrawPosition];
+        }
+
+        pools[_poolId].balance -= reward;
+
+        uint256 withdrawPosition = pool.lastWithdrawPosition;
+        pool.lastWithdrawPosition++;
+
+        _withdraw(msg.sender, reward);
+        emit Withdrawn(_poolId, withdrawPosition, msg.sender, reward);
+    }
+
     function getAccounts()
         external
         view
@@ -109,40 +143,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         ) {
             reward = generalPool.rewards[pool.lastWithdrawPosition];
         }
-    }
-
-    // @dev Leave from pool
-    function leave(uint8 _poolId)
-        external
-        checkAccess()
-        nonReentrant
-    {
-        require(isPoolUnlocked(_poolId), "SHP: pool is locked");
-
-        Pool storage pool = pools[_poolId];
-
-        require(MAX_POOL_USERS - pool.lastWithdrawPosition != 0, "SHP: pool is closed");
-
-        GeneralPoolInfo memory generalPool = generalPoolInfo;
-
-        uint256 reward;
-        if (block.timestamp >= distributionEnd(_poolId)) {
-            if (MAX_POOL_USERS - pool.lastWithdrawPosition != 0) {
-                reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
-            }
-        } else {
-            require(!pool.rewardAccepted[msg.sender], "SHP: no reward!");
-
-            reward = generalPool.rewards[pool.lastWithdrawPosition];
-        }
-
-        pools[_poolId].balance -= reward;
-
-        uint256 withdrawPosition = pool.lastWithdrawPosition;
-        pool.lastWithdrawPosition++;
-
-        _withdraw(msg.sender, reward);
-        emit Withdrawn(_poolId, withdrawPosition, msg.sender, reward);
     }
 
     // @dev Return timestamp of the end of SHP distribution.
