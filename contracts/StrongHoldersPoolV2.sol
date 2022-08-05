@@ -150,7 +150,7 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
     function distributionEnd(uint _poolId) public view returns (uint256 timestamp) {
         require(_poolId < MAX_UNLOCKS, "SHP: pool not exist");
 
-        timestamp = generalPoolInfo.unlocks[_poolId] + 18 * 31 days;
+        timestamp = generalPoolInfo.unlocks[_poolId] + 15 * 31 days;
     }
 
     // @dev Check status of the pool.
