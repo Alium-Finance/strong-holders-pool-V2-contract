@@ -75,6 +75,7 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         Pool storage pool = pools[_poolId];
 
         require(MAX_POOL_USERS - pool.lastWithdrawPosition != 0, "SHP: pool is closed");
+        require(!pool.rewardAccepted[msg.sender], "SHP: reward accepted");
 
         GeneralPoolInfo memory generalPool = generalPoolInfo;
 
@@ -84,11 +85,10 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
                 reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
             }
         } else {
-            require(!pool.rewardAccepted[msg.sender], "SHP: no reward!");
-
             reward = generalPool.rewards[pool.lastWithdrawPosition];
         }
 
+        pool.rewardAccepted[msg.sender] = true;
         pools[_poolId].balance -= reward;
 
         uint256 withdrawPosition = pool.lastWithdrawPosition;
@@ -124,7 +124,8 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         unlocks = generalPoolInfo.unlocks;
     }
 
-    function calcExitReward(uint8 _poolId) public view returns (uint256 reward) {
+    // @dev
+    function calculateReward(uint8 _poolId, address _account) public view returns (uint256 reward) {
         require(_poolId < MAX_UNLOCKS, "SHP: pool not exist");
 
         GeneralPoolInfo memory generalPool = generalPoolInfo;
@@ -134,14 +135,13 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
             if (MAX_POOL_USERS - pool.lastWithdrawPosition != 0) {
                 reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
             }
-            return reward;
-        }
-
-        if (
-            block.timestamp >= generalPoolInfo.unlocks[_poolId] &&
-            !pool.rewardAccepted[msg.sender]
-        ) {
-            reward = generalPool.rewards[pool.lastWithdrawPosition];
+        } else {
+            if (
+                block.timestamp >= generalPoolInfo.unlocks[_poolId] &&
+                !pool.rewardAccepted[_account]
+            ) {
+                reward = generalPool.rewards[pool.lastWithdrawPosition];
+            }
         }
     }
 
