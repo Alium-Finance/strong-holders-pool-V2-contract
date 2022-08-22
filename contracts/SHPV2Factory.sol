@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./StrongHoldersPoolV2.sol";
 import "./ISHP.sol";
 
-contract InvestorsSHPFactory is Ownable {
+contract SHPV2Factory is Ownable {
     uint8 public constant MAX_UNLOCKS = 10;
     uint8 public constant MAX_POOL_USERS = 10;
 
@@ -28,7 +28,11 @@ contract InvestorsSHPFactory is Ownable {
         uint256[MAX_UNLOCKS] calldata _unlocksDate,
         uint256[MAX_UNLOCKS] calldata _rewards,
         address[MAX_POOL_USERS] calldata _accounts
-    ) external returns (address pool) {
+    )
+        external
+        onlyOwner
+        returns (address pool)
+    {
         bytes memory bytecode = type(StrongHoldersPoolV2).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(nonce));
         nonce++;
