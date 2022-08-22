@@ -106,7 +106,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         accounts = generalPoolInfo.accounts;
     }
 
-    // @dev Returns rewards.
     function getRewards()
         external
         view
@@ -115,7 +114,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         rewards = generalPoolInfo.rewards;
     }
 
-    // @dev Returns rewards.
     function getUnlocks()
         external
         view
@@ -124,7 +122,6 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         unlocks = generalPoolInfo.unlocks;
     }
 
-    // @dev
     function calculateReward(uint8 _poolId, address _account) public view returns (uint256 reward) {
         require(_poolId < MAX_UNLOCKS, "SHP: pool not exist");
 
