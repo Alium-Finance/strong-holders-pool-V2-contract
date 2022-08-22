@@ -128,15 +128,16 @@ contract StrongHoldersPoolV2 is Ownable, ReentrancyGuard {
         GeneralPoolInfo memory generalPool = generalPoolInfo;
         Pool storage pool = pools[_poolId];
 
+        if (pool.rewardAccepted[msg.sender]) {
+            return reward;
+        }
+
         if (block.timestamp >= distributionEnd(_poolId)) {
             if (MAX_POOL_USERS - pool.lastWithdrawPosition != 0) {
                 reward = pools[_poolId].balance / (MAX_POOL_USERS - pool.lastWithdrawPosition);
             }
         } else {
-            if (
-                block.timestamp >= generalPoolInfo.unlocks[_poolId] &&
-                !pool.rewardAccepted[_account]
-            ) {
+            if (block.timestamp >= generalPoolInfo.unlocks[_poolId]) {
                 reward = generalPool.rewards[pool.lastWithdrawPosition];
             }
         }
