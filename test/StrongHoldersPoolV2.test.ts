@@ -1,38 +1,20 @@
 import chai from "chai";
 
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
 import { BigNumber, Signer } from "ethers";
-import { assert, expect } from "chai";
+import { assert } from "chai";
 import { solidity } from "ethereum-waffle";
 import { parseEther } from "ethers/lib/utils";
+import {
+    createSnapshot,
+    restoreSnapshot,
+    setNextBlockTimestamp,
+    expectRevert,
+    getDateNow
+} from "./helper";
 
 chai.use(solidity);
 
-function getDateNow() {
-    return Math.floor(Date.now()/1000);
-}
-
-async function setNextBlockTimestamp(timestamp: number) {
-    await network.provider.send("evm_setNextBlockTimestamp", [timestamp])
-    await network.provider.send("evm_mine")
-}
-
-async function createSnapshot() {
-    return await network.provider.request({
-        method: "evm_snapshot",
-    });
-}
-
-async function restoreSnapshot(snapshotId: any) {
-    const reverted = await network.provider.request({
-        method: "evm_revert",
-        params: [snapshotId],
-    });
-}
-
-async function expectRevert(condition: any, message: string) {
-    expect(condition).to.revertedWith(message);
-}
 
 describe("StrongHolderPool", function () {
     let accounts: Signer[];
@@ -206,14 +188,10 @@ describe("StrongHolderPool", function () {
 
     it("#leave (AFTER END_TIME)", async () => {
         let poolId = 0;
-
         await expectRevert(shp.connect(accounts[1]).leave(poolId), "SHP: pool is locked");
 
         let nextClaim = await shp.distributionEnd(poolId);
-
         await setNextBlockTimestamp(Number(nextClaim))
-
-        // console.log(BigNumber.from(initBalances[0]).div(BigNumber.from('10')))
 
         for (let i = 0; i < 10; i++) {
             let account = await accounts[i].getAddress()
@@ -222,6 +200,7 @@ describe("StrongHolderPool", function () {
             console.log(await token.balanceOf(account))
             console.log(await shp.calculateReward(poolId, account))
             await shp.connect(accounts[i]).leave(poolId)
+            assert.equal(String(await shp.calculateReward(poolId, account)), "0", "Reward still there?")
             if (i === 10 - 1) {
                 await expectRevert(shp.connect(accounts[i]).leave(poolId), "SHP: pool is closed");
             } else {
